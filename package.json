@@ -1,19 +1,39 @@
 {
   "name": "ai-assistant",
-  "version": "1.0.0",
-  "description": "Virtual assistant chat with AI",
-  "main": "index.js",
+  "version": "0.1.0",
+  "description": "Package for integrating an AI assistant chat into any web application easily and customizable.",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
+    "build": "tsup src/index.ts --format esm,cjs --dts --minify",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "prepublishOnly": "npm run build"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/tapiaw38/ai-assistant-package.git"
-  },
-  "author": "tapiaw38",
+  "keywords": [
+    "assistant",
+    "chat",
+    "ia",
+    "ai",
+    "floating-button",
+    "typescript",
+    "ui",
+    "component"
+  ],
+  "author": "",
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/tapiaw38/ai-assistant-package/issues"
-  },
-  "homepage": "https://github.com/tapiaw38/ai-assistant-package#readme"
+  "devDependencies": {
+    "eslint": "^9.26.0",
+    "prettier": "^3.5.3",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.3"
+  }
 }

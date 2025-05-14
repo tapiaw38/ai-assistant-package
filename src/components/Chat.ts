@@ -1,0 +1,855 @@
+/**
+ * Possible position for the chat window
+ */
+export type ChatPosition =
+  | "bottom-right"
+  | "bottom-left"
+  | "top-right"
+  | "top-left";
+
+/**
+ * Theme options for the chat
+ */
+export interface ChatTheme {
+  /** Primary color for headers and user messages */
+  primaryColor?: string;
+  /** Text color */
+  textColor?: string;
+  /** Window background color */
+  backgroundColor?: string;
+  /** Background color of user messages */
+  userMessageBgColor?: string;
+  /** Text color of user messages */
+  userMessageTextColor?: string;
+  /** Background color of assistant messages */
+  assistantMessageBgColor?: string;
+  /** Text color of assistant messages */
+  assistantMessageTextColor?: string;
+  /** Input border color */
+  inputBorderColor?: string;
+  /** Input background color */
+  inputBgColor?: string;
+  /** Input text color */
+  inputTextColor?: string;
+}
+
+/**
+ * Configuration options for the chat
+ */
+export interface ChatOptions {
+  /** Chat window title */
+  title?: string;
+  /** Placeholder text for the text area */
+  placeholder?: string;
+  /** Chat window position */
+  position?: ChatPosition;
+  /** Window width in pixels */
+  width?: number;
+  /** Window height in pixels */
+  height?: number;
+  /** Function to execute when a message is sent */
+  onSend?: (message: string) => Promise<string> | string;
+  /** Initial assistant message */
+  initialMessage?: string;
+  /** Theme options */
+  theme?: ChatTheme;
+  /** Whether it should be open on startup */
+  isOpen?: boolean;
+}
+
+/**
+ * Chat Component - Implements a complete chat interface with message handling,
+ * input auto-adjustment, animations, and customizable styles
+ */
+export class Chat {
+  private container: HTMLDivElement;
+  private chatWindow: HTMLDivElement;
+  private messageList: HTMLDivElement;
+  private inputArea: HTMLDivElement;
+  private isOpen: boolean = false;
+  private options: Required<ChatOptions>;
+
+  /**
+   * Creates a new Chat instance
+   * @param options Configuration options
+   */
+  constructor(options: ChatOptions = {}) {
+    this.options = {
+      title: options.title || "IA Assistant",
+      placeholder: options.placeholder || "Write your message here...",
+      position: options.position || "bottom-right",
+      width: options.width || 350,
+      height: options.height || 450,
+      onSend: options.onSend || (async (message) => `Received: ${message}`),
+      initialMessage: options.initialMessage || "Hello, how can I help you?",
+      theme: {
+        primaryColor: options.theme?.primaryColor || "#4a90e2",
+        textColor: options.theme?.textColor || "#333333",
+        backgroundColor: options.theme?.backgroundColor || "#ffffff",
+        userMessageBgColor:
+          options.theme?.userMessageBgColor ||
+          options.theme?.primaryColor ||
+          "#4a90e2",
+        userMessageTextColor: options.theme?.userMessageTextColor || "#ffffff",
+        assistantMessageBgColor:
+          options.theme?.assistantMessageBgColor || "#f1f1f1",
+        assistantMessageTextColor:
+          options.theme?.assistantMessageTextColor ||
+          options.theme?.textColor ||
+          "#333333",
+        inputBorderColor: options.theme?.inputBorderColor || "#e0e0e0",
+        inputBgColor: options.theme?.inputBgColor || "#ffffff",
+        inputTextColor:
+          options.theme?.inputTextColor ||
+          options.theme?.textColor ||
+          "#333333",
+      },
+      isOpen: options.isOpen || false,
+    };
+
+    this.createChatElements();
+    this.addEventListeners();
+    this.loadStyles();
+    this.addInitialMessage();
+
+    // Open the chat if specified in the options
+    if (this.options.isOpen) {
+      this.open();
+    }
+  }
+
+  /**
+   * Creates the DOM elements for the chat
+   */
+  private createChatElements(): void {
+    // Main container
+    this.container = document.createElement("div");
+    this.container.className = "ia-chat-container";
+    this.container.style.display = "none";
+
+    // Chat window
+    this.chatWindow = document.createElement("div");
+    this.chatWindow.className = `ia-chat-window ${this.options.position}`;
+
+    // Header
+    const header = document.createElement("div");
+    header.className = "ia-chat-header";
+
+    const title = document.createElement("div");
+    title.className = "ia-chat-title";
+    title.textContent = this.options.title;
+
+    const closeButton = document.createElement("button");
+    closeButton.className = "ia-chat-close";
+    closeButton.innerHTML = "&times;";
+    closeButton.setAttribute("aria-label", "Close chat");
+    closeButton.setAttribute("type", "button");
+
+    header.appendChild(title);
+    header.appendChild(closeButton);
+
+    // Message list
+    this.messageList = document.createElement("div");
+    this.messageList.className = "ia-chat-messages";
+
+    // Input area
+    this.inputArea = document.createElement("div");
+    this.inputArea.className = "ia-chat-input-area";
+
+    // CHANGE: Create div wrapper for the textarea for better control
+    const textareaWrapper = document.createElement("div");
+    textareaWrapper.className = "ia-chat-input-wrapper";
+
+    const textarea = document.createElement("textarea");
+    textarea.className = "ia-chat-input";
+    textarea.placeholder = this.options.placeholder;
+    textarea.rows = 1;
+    // Set inline styles to override any calculated style
+    textarea.style.height = "42px";
+    textarea.style.minHeight = "42px";
+    textarea.style.maxHeight = "120px";
+    textarea.style.overflowY = "hidden";
+    textarea.style.resize = "none";
+    textarea.setAttribute("aria-label", "Message");
+
+    const sendButton = document.createElement("button");
+    sendButton.className = "ia-chat-send";
+    sendButton.innerHTML = "&#10148;";
+    sendButton.setAttribute("aria-label", "Send message");
+    sendButton.setAttribute("type", "button");
+
+    // CHANGE: Add the textarea to the wrapper, then the wrapper to the inputArea
+    textareaWrapper.appendChild(textarea);
+    this.inputArea.appendChild(textareaWrapper);
+    this.inputArea.appendChild(sendButton);
+
+    // Assemble components
+    this.chatWindow.appendChild(header);
+    this.chatWindow.appendChild(this.messageList);
+    this.chatWindow.appendChild(this.inputArea);
+    this.container.appendChild(this.chatWindow);
+  }
+
+  /**
+   * Adds the necessary event listeners
+   */
+  private addEventListeners(): void {
+    // Close button
+    const closeButton = this.chatWindow.querySelector(
+      ".ia-chat-close"
+    ) as HTMLButtonElement;
+    closeButton.addEventListener("click", () => {
+      this.toggle();
+      // Remove focus from the button after clicking
+      closeButton.blur();
+    });
+
+    // Send button
+    const sendButton = this.chatWindow.querySelector(
+      ".ia-chat-send"
+    ) as HTMLButtonElement;
+    sendButton.addEventListener("click", () => {
+      this.sendMessage();
+      // Remove focus from the button after clicking
+      sendButton.blur();
+    });
+
+    // Send with Enter, new line with Shift+Enter
+    const textarea = this.chatWindow.querySelector(
+      ".ia-chat-input"
+    ) as HTMLTextAreaElement;
+
+    // Set initial height
+    textarea.style.height = "42px";
+
+    // Handle keyboard events
+    textarea.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        this.sendMessage();
+      } else {
+        // For any other key, adjust the height in the next cycle
+        setTimeout(() => this.autoResizeTextarea(textarea), 0);
+      }
+    });
+
+    // Auto-adjust on each content change
+    textarea.addEventListener("input", () => {
+      this.autoResizeTextarea(textarea);
+    });
+
+    // Also adjust on focus
+    textarea.addEventListener("focus", () => {
+      this.autoResizeTextarea(textarea);
+    });
+
+    // Click outside to close
+    document.addEventListener("click", (e) => {
+      if (
+        this.isOpen &&
+        !this.container.contains(e.target as Node) &&
+        !(e.target as HTMLElement).closest(".floating-button")
+      ) {
+        this.toggle();
+      }
+    });
+  }
+
+  /**
+   * Automatically adjusts the height of the textarea according to its content
+   */
+  private autoResizeTextarea(textarea: HTMLTextAreaElement): void {
+    // Save the current scroll position
+    const scrollPos = this.messageList.scrollTop;
+
+    // First reset the height to get an accurate scrollHeight
+    textarea.style.height = "42px";
+
+    // Calculate new height based on content
+    const newHeight = Math.min(textarea.scrollHeight, 120);
+
+    // Apply the new height
+    textarea.style.height = `${newHeight}px`;
+
+    if (newHeight > 42) {
+      // The content requires more than one line
+      textarea.classList.add("multiline");
+      textarea.style.overflowY = newHeight >= 120 ? "auto" : "hidden";
+    } else {
+      // The content fits on one line
+      textarea.classList.remove("multiline");
+      textarea.style.overflowY = "hidden";
+    }
+
+    // Restore the scroll position
+    this.messageList.scrollTop = scrollPos;
+  }
+
+  /**
+   * Resets the textarea to its initial state
+   */
+  private resetTextarea(textarea: HTMLTextAreaElement): void {
+    textarea.value = "";
+    textarea.classList.remove("multiline");
+    textarea.style.height = "42px";
+    textarea.style.minHeight = "42px";
+    textarea.style.overflowY = "hidden";
+  }
+
+  /**
+   * Sends a message and processes the response
+   */
+  private async sendMessage(): Promise<void> {
+    const textarea = this.chatWindow.querySelector(
+      ".ia-chat-input"
+    ) as HTMLTextAreaElement;
+    const message = textarea.value.trim();
+
+    if (message) {
+      // Add user message
+      this.addMessage(message, "user");
+
+      // Clear and reset input
+      this.resetTextarea(textarea);
+
+      // Show typing indicator
+      this.showTypingIndicator();
+
+      try {
+        // Get response (can be a promise or a direct string)
+        const response = await this.options.onSend(message);
+
+        // Remove indicator and show response
+        this.hideTypingIndicator();
+        this.addMessage(response, "assistant");
+      } catch (error) {
+        this.hideTypingIndicator();
+        this.addMessage(
+          "Sorry, an error occurred while processing your message.",
+          "error"
+        );
+        console.error("Chat error:", error);
+      }
+
+      // Scroll to the end
+      this.scrollToBottom();
+    }
+  }
+
+  /**
+   * Adds a message to the chat
+   * @param text Message text
+   * @param sender Message sender (user, assistant, error)
+   */
+  private addMessage(
+    text: string,
+    sender: "user" | "assistant" | "error"
+  ): void {
+    const messageElement = document.createElement("div");
+    messageElement.className = `ia-chat-message ${sender}`;
+
+    // Sanitize the text (prevent XSS)
+    const sanitizedText = this.sanitizeText(text);
+
+    // Format text (looking for URLs, etc.)
+    const formattedText = this.formatText(sanitizedText);
+
+    messageElement.innerHTML = formattedText;
+    this.messageList.appendChild(messageElement);
+    this.scrollToBottom();
+  }
+
+  /**
+   * Sanitizes the text to prevent XSS
+   */
+  private sanitizeText(text: string): string {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  /**
+   * Formats the text by detecting links, titles, and lists
+   */
+  private formatText(text: string): string {
+    // Convert URLs to links
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    let formatted = text.replace(
+      urlRegex,
+      '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+    );
+
+    // Titles in **bold** => <span class="ia-title">...</span>
+    formatted = formatted.replace(
+      /\*\*(.*?)\*\*/g,
+      '<span class="ia-title">$1</span>'
+    );
+
+    // Lists with - at the beginning of the line
+    // First, convert lines starting with - to <li>
+    formatted = formatted.replace(
+      /(^|\n)-\s+(.*?)(?=\n|$)/g,
+      (match, p1, p2) => `${p1}<li>${p2}</li>`
+    );
+    // Then, wrap consecutive <li> elements in <ul>
+    formatted = formatted.replace(
+      /(<li>.*?<\/li>\s*)+/gs,
+      (match) => `<ul>${match.replace(/\s*$/, "")}</ul>`
+    );
+
+    return formatted;
+  }
+
+  /**
+   * Shows the typing indicator
+   */
+  private showTypingIndicator(): void {
+    const typingElement = document.createElement("div");
+    typingElement.className = "ia-chat-message assistant typing";
+    typingElement.innerHTML =
+      '<span class="ia-typing-dot"></span><span class="ia-typing-dot"></span><span class="ia-typing-dot"></span>';
+    typingElement.id = "ia-typing-indicator";
+    this.messageList.appendChild(typingElement);
+    this.scrollToBottom();
+  }
+
+  /**
+   * Hides the typing indicator
+   */
+  private hideTypingIndicator(): void {
+    const typingElement = document.getElementById("ia-typing-indicator");
+    if (typingElement) {
+      typingElement.remove();
+    }
+  }
+
+  /**
+   * Scrolls to the end of the message list
+   */
+  private scrollToBottom(): void {
+    this.messageList.scrollTop = this.messageList.scrollHeight;
+  }
+
+  /**
+   * Adds the initial assistant message
+   */
+  private addInitialMessage(): void {
+    if (this.options.initialMessage) {
+      this.addMessage(this.options.initialMessage, "assistant");
+    }
+  }
+
+  /**
+   * Toggles between showing and hiding the chat
+   */
+  public toggle(): void {
+    this.isOpen = !this.isOpen;
+    this.container.style.display = this.isOpen ? "block" : "none";
+
+    if (this.isOpen) {
+      // Focus the textarea when opened
+      setTimeout(() => {
+        const textarea = this.chatWindow.querySelector(
+          ".ia-chat-input"
+        ) as HTMLTextAreaElement;
+        textarea.style.height = "42px"; // Reset initial height
+        textarea.focus();
+      }, 100);
+
+      // Scroll to the end
+      this.scrollToBottom();
+    }
+  }
+
+  /**
+   * Opens the chat
+   */
+  public open(): void {
+    if (!this.isOpen) {
+      this.toggle();
+    }
+  }
+
+  /**
+   * Closes the chat
+   */
+  public close(): void {
+    if (this.isOpen) {
+      this.toggle();
+    }
+  }
+
+  /**
+   * Mounts the chat in the DOM
+   * @param container Element or selector where to mount the chat
+   */
+  public mount(container: HTMLElement | string = document.body): void {
+    const targetContainer =
+      typeof container === "string"
+        ? (document.querySelector(container) as HTMLElement)
+        : container;
+
+    if (targetContainer) {
+      targetContainer.appendChild(this.container);
+    }
+  }
+
+  /**
+   * Unmounts the chat from the DOM
+   */
+  public unmount(): void {
+    if (this.container.parentNode) {
+      this.container.parentNode.removeChild(this.container);
+    }
+  }
+
+  /**
+   * Loads the necessary CSS styles
+   */
+  private loadStyles(): void {
+    // Check if styles are already loaded
+    if (document.getElementById("ia-chat-styles")) {
+      return;
+    }
+
+    const {
+      primaryColor,
+      textColor,
+      backgroundColor,
+      userMessageBgColor,
+      userMessageTextColor,
+      assistantMessageBgColor,
+      assistantMessageTextColor,
+      inputBorderColor,
+      inputBgColor,
+      inputTextColor,
+    } = this.options.theme;
+
+    const styleElement = document.createElement("style");
+    styleElement.id = "ia-chat-styles";
+    styleElement.textContent = `
+      .ia-chat-container {
+        position: fixed;
+        z-index: 1001;
+        pointer-events: none;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+      }
+      
+      .ia-chat-window {
+        position: absolute;
+        width: ${this.options.width}px;
+        height: ${this.options.height}px;
+        background-color: ${backgroundColor};
+        border-radius: 10px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        pointer-events: auto;
+        transition: all 0.3s ease;
+      }
+      
+      .ia-chat-window.bottom-right {
+        bottom: 90px;
+        right: 20px;
+      }
+      
+      .ia-chat-window.bottom-left {
+        bottom: 90px;
+        left: 20px;
+      }
+      
+      .ia-chat-window.top-right {
+        top: 20px;
+        right: 20px;
+      }
+      
+      .ia-chat-window.top-left {
+        top: 20px;
+        left: 20px;
+      }
+      
+      .ia-chat-header {
+        background-color: ${primaryColor};
+        color: white;
+        padding: 12px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      
+      .ia-chat-title {
+        font-weight: bold;
+        color: white;
+        font-size: 1.08em;
+        display: inline-block;
+        margin-bottom: 2px;
+      }
+      
+      .ia-chat-close {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 24px;
+        cursor: pointer;
+        padding: 0;
+        margin-left: 10px;
+        line-height: 1;
+        outline: none; /* Prevent the outline from being displayed on click */
+      }
+      
+      /* Prevent focus visual effects on close button */
+      .ia-chat-close:focus {
+        outline: none;
+        box-shadow: none;
+      }
+      
+      .ia-chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      
+      .ia-chat-message {
+        padding: 10px 14px;
+        border-radius: 16px;
+        max-width: 80%;
+        word-break: break-word;
+        line-height: 1.4;
+      }
+      
+      .ia-chat-message.user {
+        background-color: ${userMessageBgColor};
+        color: ${userMessageTextColor};
+        align-self: flex-end;
+        border-bottom-right-radius: 4px;
+      }
+      
+      .ia-chat-message.assistant {
+        background-color: ${assistantMessageBgColor};
+        color: ${assistantMessageTextColor};
+        align-self: flex-start;
+        border-bottom-left-radius: 4px;
+      }
+      
+      .ia-chat-message.error {
+        background-color: #ffe6e6;
+        color: #d32f2f;
+        align-self: flex-start;
+        border-bottom-left-radius: 4px;
+      }
+      
+      .ia-chat-input-area {
+        padding: 12px;
+        border-top: 1px solid #e0e0e0;
+        display: flex;
+        align-items: flex-end;
+      }
+      
+      .ia-chat-input-wrapper {
+        flex: 1;
+        position: relative;
+        display: flex;
+      }
+      
+      .ia-chat-input {
+        flex: 1;
+        border: 1px solid ${inputBorderColor};
+        border-radius: 20px;
+        padding: 10px 14px;
+        font-family: inherit;
+        resize: none;
+        box-sizing: border-box;
+        outline: none;
+        transition: height 0.1s ease-out, border-color 0.2s;
+        line-height: 1.4;
+        min-height: 42px !important;
+        max-height: 120px;
+        overflow-y: hidden !important; /* Force hide vertical scroll by default */
+        background-color: ${inputBgColor};
+        color: ${inputTextColor};
+      }
+      
+      .ia-chat-input.multiline {
+        overflow-y: auto !important; /* Only allow scroll when there are multiple lines */
+      }
+      
+      .ia-chat-input:focus {
+        border-color: ${primaryColor};
+      }
+      
+      .ia-chat-send {
+        background-color: ${primaryColor};
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        margin-left: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        transition: background-color 0.2s;
+        outline: none; /* Prevent the outline from being displayed on click */
+      }
+      
+      .ia-chat-send:hover {
+        background-color: ${this.darkenColor(primaryColor || "#4a90e2", 10)};
+      }
+      
+      /* Prevent focus visual effects on send button */
+      .ia-chat-send:focus {
+        outline: none;
+        box-shadow: none;
+      }
+      
+      /* Typing indicator */
+      .typing {
+        display: flex;
+        align-items: center;
+        padding: 8px 14px;
+      }
+      
+      .ia-typing-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: #888;
+        margin-right: 4px;
+        animation: typing-dot 1.4s infinite ease-in-out both;
+      }
+      
+      .ia-typing-dot:nth-child(1) {
+        animation-delay: 0s;
+      }
+      
+      .ia-typing-dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      
+      .ia-typing-dot:nth-child(3) {
+        animation-delay: 0.4s;
+        margin-right: 0;
+      }
+      
+      @keyframes typing-dot {
+        0%, 80%, 100% { transform: scale(0.7); opacity: 0.6; }
+        40% { transform: scale(1); opacity: 1; }
+      }
+      
+      /* Responsive */
+      @media (max-width: 480px) {
+        .ia-chat-window {
+          width: calc(100% - 40px);
+          height: 70vh;
+        }
+      }
+      
+      ul {
+        margin: 8px 0 8px 18px;
+        padding-left: 18px;
+      }
+      ul li {
+        margin-bottom: 2px;
+        list-style: disc inside;
+      }
+      
+      .ia-chat-messages::-webkit-scrollbar {
+        width: 8px;
+        background: transparent;
+      }
+      .ia-chat-messages::-webkit-scrollbar-thumb {
+        background: ${inputBorderColor};
+        border-radius: 8px;
+      }
+      .ia-chat-messages::-webkit-scrollbar-thumb:hover {
+        background: ${primaryColor};
+      }
+      .ia-chat-messages {
+        scrollbar-width: thin;
+        scrollbar-color: ${inputBorderColor} transparent;
+      }
+      
+      .ia-chat-input::-webkit-scrollbar {
+        width: 8px;
+        background: transparent;
+        border-radius: 20px;
+      }
+      .ia-chat-input::-webkit-scrollbar-thumb {
+        background: ${inputBorderColor};
+        border-radius: 20px;
+        min-height: 24px;
+        border: 2px solid ${inputBgColor};
+      }
+      .ia-chat-input::-webkit-scrollbar-thumb:hover {
+        background: ${primaryColor};
+      }
+      .ia-chat-input {
+        scrollbar-width: thin;
+        scrollbar-color: ${inputBorderColor} ${inputBgColor};
+      }
+    `;
+
+    document.head.appendChild(styleElement);
+  }
+
+  /**
+   * Darkens a color by a certain percentage
+   */
+  private darkenColor(color: string, percent: number): string {
+    // If the color is a name, convert it to hex format
+    if (!/^#[0-9A-F]{3,6}$/i.test(color)) {
+      const tempElement = document.createElement("div");
+      tempElement.style.color = color;
+      document.body.appendChild(tempElement);
+      const computedColor = getComputedStyle(tempElement).color;
+      document.body.removeChild(tempElement);
+
+      if (computedColor.startsWith("rgb")) {
+        color = this.rgbToHex(computedColor);
+      } else {
+        color = "#4a90e2"; // Default color if it cannot be converted
+      }
+    }
+
+    // Remove the # symbol if it exists
+    color = color.replace("#", "");
+
+    // Convert to RGB
+    let r = parseInt(color.substring(0, 2), 16);
+    let g = parseInt(color.substring(2, 4), 16);
+    let b = parseInt(color.substring(4, 6), 16);
+
+    // Reduce brightness
+    r = Math.floor((r * (100 - percent)) / 100);
+    g = Math.floor((g * (100 - percent)) / 100);
+    b = Math.floor((b * (100 - percent)) / 100);
+
+    // Convert back to hex format
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  }
+
+  /**
+   * Converts an RGB color to hexadecimal format
+   */
+  private rgbToHex(rgb: string): string {
+    // Extract RGB values
+    const match = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+    if (!match) return "#000000";
+
+    const r = parseInt(match[1], 10);
+    const g = parseInt(match[2], 10);
+    const b = parseInt(match[3], 10);
+
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  }
+}
