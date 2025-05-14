@@ -1,4 +1,4 @@
-# IA Assistant
+# Seely IA Assistant
 
 Library to easily integrate an IA assistant chat into any web application in an easy and customizable way.
 
@@ -14,19 +14,19 @@ Library to easily integrate an IA assistant chat into any web application in an 
 ## Installation
 
 ```bash
-npm install ai-assistant
+npm install seely-ai-assistant
 ```
 
 or
 
 ```bash
-yarn add ai-assistant
+yarn add seely-ai-assistant
 ```
 
 ## Basic Usage
 
 ```javascript
-import { createAssistant } from "ai-assistant";
+import { createAssistant } from "seely-ai-assistant";
 
 // Create an assistant with minimal configuration
 const assistant = createAssistant({
@@ -46,6 +46,10 @@ const assistant = createAssistant({
 ```javascript
 // Assistant with full configuration
 const assistant = createAssistant({
+  // API Key for the assistant (required)
+  apiKey: "your-api-key",
+  // API URL for the assistant server (required)
+  apiBaseUrl: "http://localhost:8000",
   // General options
   title: "My Assistant",
   placeholder: "How can I help you?",
@@ -75,36 +79,12 @@ const assistant = createAssistant({
     inputBgColor: "#ffffff", // Input background color
     inputTextColor: "#333333", // Input text color
   },
-
-  // Container for the chat
-  container: document.body,
-
-  // Function to process messages (required)
-  onSend: async (message) => {
-    // Here we process the user's message
-    // This function can be asynchronous (return a promise)
-
-    // Example: Integration with an external API
-    try {
-      const response = await fetch("https://my-api.com/chat", {
-        method: "POST",
-        body: JSON.stringify({ message }),
-        headers: { "Content-Type": "application/json" },
-      });
-
-      const data = await response.json();
-      return data.reply;
-    } catch (error) {
-      console.error("Error processing message:", error);
-      return "Sorry, there was an error processing your message.";
-    }
-  },
 });
 ```
 
-## API
+## Methods
 
-Once the assistant is created, you can interact with it through its API:
+You can control the assistant with the following methods:
 
 ```javascript
 // Open the chat
@@ -129,54 +109,6 @@ assistant.showButton();
 assistant.unmount();
 ```
 
-## Advanced Usage
-
-### Individual Components
-
-You can also use the components separately:
-
-```javascript
-import { FloatingButton, Chat } from "assistant-ia";
-
-// Create a custom floating button
-const button = new FloatingButton({
-  position: "top-right",
-  backgroundColor: "#ff5722",
-  icon: "🤖",
-  size: "small",
-});
-
-// Create an independent chat
-const chat = new Chat({
-  title: "Technical Support",
-  position: "bottom-left",
-  onSend: (message) => `Echo: ${message}`,
-});
-
-// Mount the components in the DOM
-button.mount();
-chat.mount();
-
-// Connect the button with the chat
-button.setOnClick(() => {
-  chat.toggle();
-});
-```
-
-### Integration with IA APIs
-
-Example of integration with OpenAI:
-
-```javascript
-import { createAssistant } from "assistant-ia";
-import OpenAI from "openai";
-
-// Initialize the OpenAI client
-const openai = new OpenAI({
-  apiKey: "your-api-key", // Replace with your API key
-});
-
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-```
+This project is licensed under the ISC License.
