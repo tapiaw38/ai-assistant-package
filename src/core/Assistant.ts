@@ -192,7 +192,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
           mode: "cors",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `x-api-key ${options.apiKey}`,
+            "x-api-key": `${options.apiKey}`,
           },
           body: JSON.stringify({ content: message, context: context }),
         }
