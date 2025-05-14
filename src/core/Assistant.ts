@@ -12,6 +12,8 @@ import {
 export interface AssistantOptions {
   /** Required API Key for authentication */
   apiKey: string;
+  /** Required API Base URL for authentication */
+  apiBaseUrl: string;
   /** Title of the chat window */
   title?: string;
   /** Placeholder text for the text area */
@@ -83,7 +85,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
 
   // Chat options (without onSend, it will be handled internally)
   const chatOptions: ChatOptions = {
-    title: options.title || "IA Assistant",
+    title: options.title || "Seely IA Assistant",
     placeholder: options.placeholder || "Write your message here...",
     position: options.position || "bottom-right",
     initialMessage: options.initialMessage,
@@ -126,17 +128,14 @@ export function createAssistant(options: AssistantOptions): Assistant {
   // Function to get all conversations
   async function fetchAllConversations() {
     try {
-      const response = await fetch(
-        "http://15.228.163.232/assistant-api/conversation/user",
-        {
-          method: "GET",
-          mode: "cors",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${options.apiKey}`,
-          },
-        }
-      );
+      const response = await fetch(`${options.apiBaseUrl}/conversation/user`, {
+        method: "GET",
+        mode: "cors",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${options.apiKey}`,
+        },
+      });
       if (!response.ok) {
         throw new Error(`Error fetching conversations: ${response.status}`);
       }
@@ -152,7 +151,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
   async function fetchMessages(conversationId: string) {
     try {
       const response = await fetch(
-        `http://15.228.163.232/assistant-api/conversation/${conversationId}`,
+        `${options.apiBaseUrl}/conversation/${conversationId}`,
         {
           method: "GET",
           mode: "cors",
@@ -186,7 +185,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
 
     try {
       const response = await fetch(
-        `http://15.228.163.232/assistant-api/conversation/${conversationId}/message`,
+        `${options.apiBaseUrl}/conversation/${conversationId}/message`,
         {
           method: "POST",
           mode: "cors",
@@ -216,18 +215,15 @@ export function createAssistant(options: AssistantOptions): Assistant {
   // Logic to create a conversation on startup
   async function createConversationAndMountChat() {
     try {
-      const response = await fetch(
-        "http://15.228.163.232/assistant-api/conversation/",
-        {
-          method: "POST",
-          mode: "cors",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `bearer ${options.apiKey}`,
-          },
-          body: JSON.stringify({ title: chatOptions.title }),
-        }
-      );
+      const response = await fetch(`${options.apiBaseUrl}/conversation/`, {
+        method: "POST",
+        mode: "cors",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `bearer ${options.apiKey}`,
+        },
+        body: JSON.stringify({ title: chatOptions.title }),
+      });
 
       if (!response.ok) {
         throw new Error(`Error creating conversation: ${response.status}`);
