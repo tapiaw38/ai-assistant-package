@@ -1,4 +1,4 @@
-# Seely IA Assistant
+# Nymia IA Assistant
 
 Library to easily integrate an IA assistant chat into any web application in an easy and customizable way.
 
@@ -14,19 +14,19 @@ Library to easily integrate an IA assistant chat into any web application in an 
 ## Installation
 
 ```bash
-npm install seely-ai-assistant
+npm install nymia-ai-assistant
 ```
 
 or
 
 ```bash
-yarn add seely-ai-assistant
+yarn add nymia-ai-assistant
 ```
 
 ## Basic Usage
 
 ```javascript
-import { createAssistant } from "seely-ai-assistant";
+import { createAssistant } from "nymia-ai-assistant";
 
 // Create an assistant with minimal configuration
 const assistant = createAssistant({

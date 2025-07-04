@@ -85,7 +85,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
 
   // Chat options (without onSend, it will be handled internally)
   const chatOptions: ChatOptions = {
-    title: options.title || "Seely IA Assistant",
+    title: options.title || "Nymia IA Assistant",
     placeholder: options.placeholder || "Write your message here...",
     position: options.position || "bottom-right",
     initialMessage: options.initialMessage,
@@ -121,6 +121,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
   let chat: Chat | null = null;
   let conversationId: string | null = null;
   let pendingOpen = false;
+  let lastContext: string = "";
 
   // Mount components
   button.mount();
@@ -179,8 +180,23 @@ export function createAssistant(options: AssistantOptions): Assistant {
   ): Promise<string> {
     if (!conversationId) return "No active conversation.";
 
-    if (context == "") {
-      context = document.body.innerText;
+    if (context === "") {
+      const mainContent = document.querySelector('main, article, .content, #content, [role="main"]') as HTMLElement;
+      if (mainContent) {
+        context = mainContent.innerText;
+      } else {
+        const body = document.body.cloneNode(true) as HTMLElement;
+        const elementsToRemove = body.querySelectorAll(
+          'nav, header, footer, .sidebar, .navigation, .menu, .ads, script, style, .cookie-banner'
+        );
+        elementsToRemove.forEach(el => el.remove());
+        context = body.innerText;
+      }
+    }
+
+    const contextToSend = context === lastContext ? "" : context;
+    if (contextToSend !== "") {
+      lastContext = context;
     }
 
     try {
@@ -193,7 +209,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
             "Content-Type": "application/json",
             "x-api-key": `${options.apiKey}`,
           },
-          body: JSON.stringify({ content: message, context: context }),
+          body: JSON.stringify({ content: message, context: contextToSend }),
         }
       );
       if (!response.ok) {
