@@ -181,22 +181,31 @@ export function createAssistant(options: AssistantOptions): Assistant {
     if (!conversationId) return "No active conversation.";
 
     if (context === "") {
-      const mainContent = document.querySelector('main, article, .content, #content, [role="main"]') as HTMLElement;
+      const mainContent = document.querySelector(
+        'main, article, .content, #content, [role="main"]'
+      ) as HTMLElement;
       if (mainContent) {
         context = mainContent.innerText;
       } else {
         const body = document.body.cloneNode(true) as HTMLElement;
         const elementsToRemove = body.querySelectorAll(
-          'nav, header, footer, .sidebar, .navigation, .menu, .ads, script, style, .cookie-banner'
+          "nav, header, footer, .sidebar, .navigation, .menu, .ads, script, style, .cookie-banner"
         );
-        elementsToRemove.forEach(el => el.remove());
+        elementsToRemove.forEach((el) => el.remove());
         context = body.innerText;
       }
     }
 
-    const contextToSend = context === lastContext ? "" : context;
+    const normalizedContext = context
+      .replace(/\s+/g, " ")
+      .trim()
+      .substring(0, 8000);
+
+    const contextToSend =
+      normalizedContext === lastContext ? "" : normalizedContext;
+
     if (contextToSend !== "") {
-      lastContext = context;
+      lastContext = normalizedContext;
     }
 
     try {
@@ -209,16 +218,25 @@ export function createAssistant(options: AssistantOptions): Assistant {
             "Content-Type": "application/json",
             "x-api-key": `${options.apiKey}`,
           },
-          body: JSON.stringify({ content: message, context: contextToSend }),
+          body: JSON.stringify({
+            content: message,
+            context: contextToSend,
+            contextHash: contextToSend
+              ? btoa(contextToSend.substring(0, 100))
+              : null,
+          }),
         }
       );
+
       if (!response.ok) {
         throw new Error(`Error sending message: ${response.status}`);
       }
+
       const data = await response.json();
       const assistantMsg = data.data
         .reverse()
         .find((msg: any) => msg.sender === "assistant");
+
       return assistantMsg
         ? assistantMsg.content
         : "No response from the assistant.";
