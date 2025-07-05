@@ -48,7 +48,12 @@ export interface ChatOptions {
   /** Window height in pixels */
   height?: number;
   /** Function to execute when a message is sent */
-  onSend?: (message: string) => Promise<string> | string;
+  onSend?: (
+    message: string
+  ) =>
+    | Promise<string | { content: string; isHtml: boolean }>
+    | string
+    | { content: string; isHtml: boolean };
   /** Initial assistant message */
   initialMessage?: string;
   /** Theme options */
@@ -321,7 +326,23 @@ export class Chat {
 
         // Remove indicator and show response
         this.hideTypingIndicator();
-        this.addMessage(response, "assistant");
+
+        // Handle different response types
+        if (typeof response === "string") {
+          this.addMessage(response, "assistant");
+        } else if (
+          response &&
+          typeof response === "object" &&
+          "content" in response
+        ) {
+          this.addMessage(
+            response.content,
+            "assistant",
+            response.isHtml || false
+          );
+        } else {
+          this.addMessage("Invalid response format", "error");
+        }
       } catch (error) {
         this.hideTypingIndicator();
         this.addMessage(
@@ -340,21 +361,29 @@ export class Chat {
    * Adds a message to the chat
    * @param text Message text
    * @param sender Message sender (user, assistant, error)
+   * @param isHtml Whether the text contains HTML (only for assistant messages)
    */
   private addMessage(
     text: string,
-    sender: "user" | "assistant" | "error"
+    sender: "user" | "assistant" | "error",
+    isHtml: boolean = false
   ): void {
     const messageElement = document.createElement("div");
     messageElement.className = `ia-chat-message ${sender}`;
 
-    // Sanitize the text (prevent XSS)
-    const sanitizedText = this.sanitizeText(text);
+    if (isHtml && sender === "assistant") {
+      // If the message is HTML, sanitize it before inserting
+      messageElement.innerHTML = this.sanitizeHtml(text);
+    } else {
+      // Sanitize the text (prevent XSS)
+      const sanitizedText = this.sanitizeText(text);
 
-    // Format text (looking for URLs, etc.)
-    const formattedText = this.formatText(sanitizedText);
+      // Format text (looking for URLs, etc.)
+      const formattedText = this.formatText(sanitizedText);
 
-    messageElement.innerHTML = formattedText;
+      messageElement.innerHTML = formattedText;
+    }
+
     this.messageList.appendChild(messageElement);
     this.scrollToBottom();
   }
@@ -366,6 +395,64 @@ export class Chat {
     const div = document.createElement("div");
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  /**
+   * Sanitizes HTML to allow only safe tags for assistant messages
+   */
+  private sanitizeHtml(html: string): string {
+    // Crear un elemento temporal para limpiar el HTML
+    const temp = document.createElement("div");
+    temp.innerHTML = html;
+
+    // Define allowed tags and attributes
+    const allowedTags = ["img", "br", "p", "strong", "em", "b", "i"];
+    const allowedAttributes: { [key: string]: string[] } = {
+      img: ["src", "alt", "style", "width", "height"],
+      p: ["style"],
+      strong: [],
+      em: [],
+      b: [],
+      i: [],
+      br: [],
+    };
+
+    this.cleanElement(temp, allowedTags, allowedAttributes);
+
+    return temp.innerHTML;
+  }
+
+  /**
+   * Recursively clean HTML elements
+   */
+  private cleanElement(
+    element: HTMLElement,
+    allowedTags: string[],
+    allowedAttributes: { [key: string]: string[] }
+  ): void {
+    const children = Array.from(element.children);
+
+    children.forEach((child) => {
+      const tagName = child.tagName.toLowerCase();
+
+      if (!allowedTags.includes(tagName)) {
+        // Remove disallowed elements
+        element.removeChild(child);
+      } else {
+        // Clean disallowed attributes
+        const allowedAttrs = allowedAttributes[tagName] || [];
+        const attributes = Array.from(child.attributes);
+
+        attributes.forEach((attr) => {
+          if (!allowedAttrs.includes(attr.name)) {
+            child.removeAttribute(attr.name);
+          }
+        });
+
+        // Recursively clean children
+        this.cleanElement(child as HTMLElement, allowedTags, allowedAttributes);
+      }
+    });
   }
 
   /**
@@ -796,6 +883,24 @@ export class Chat {
       .ia-chat-input {
         scrollbar-width: thin;
         scrollbar-color: ${inputBorderColor} ${inputBgColor};
+      }
+
+      .ia-chat-message img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        margin: 10px 0;
+        display: block;
+      }
+
+      .ia-chat-message.assistant img {
+        max-width: 300px;
+      }
+
+      .ia-chat-message p {
+        margin: 5px 0;
+        line-height: 1.4;
       }
     `;
 

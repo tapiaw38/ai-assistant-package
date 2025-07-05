@@ -173,6 +173,20 @@ export function createAssistant(options: AssistantOptions): Assistant {
     }
   }
 
+  // Function to process HTML content
+  function processHtmlContent(content: string): string {
+    // Clean unnecessary escapes
+    const cleanContent = content.replace(/\\"/g, '"');
+
+    // Improve image styles
+    const processedContent = cleanContent.replace(
+      /<img ([^>]*style="[^"]*max-width:[^"]*)"([^>]*)>/g,
+      '<img $1; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin: 10px 0;"$2>'
+    );
+
+    return processedContent;
+  }
+
   // Function to send message
   async function sendMessageToApi(
     message: string,
@@ -237,9 +251,12 @@ export function createAssistant(options: AssistantOptions): Assistant {
         .reverse()
         .find((msg: any) => msg.sender === "assistant");
 
-      return assistantMsg
-        ? assistantMsg.content
-        : "No response from the assistant.";
+      if (assistantMsg) {
+        // Process the content to clean HTML and improve styles
+        return processHtmlContent(assistantMsg.content);
+      }
+
+      return "No response from the assistant.";
     } catch (error) {
       console.error("Error sending message:", error);
       return "Sorry, there was an error processing your message. Please try again.";
@@ -278,9 +295,22 @@ export function createAssistant(options: AssistantOptions): Assistant {
           if (trimmedMessage) {
             const response = await sendMessageToApi(trimmedMessage);
             textarea.value = "";
-            return response;
+
+            // Verify if the response contains HTML
+            const containsHtml =
+              response.includes("<img") ||
+              response.includes("<p>") ||
+              response.includes("<br>");
+
+            return {
+              content: response,
+              isHtml: containsHtml,
+            };
           }
-          return "Please write a valid message.";
+          return {
+            content: "Please write a valid message.",
+            isHtml: false,
+          };
         },
       });
       chat.mount(options.container || document.body);
@@ -290,9 +320,15 @@ export function createAssistant(options: AssistantOptions): Assistant {
         const messages = await fetchMessages(conversationId);
         messages.forEach((msg: any) => {
           if (chat && typeof chat["addMessage"] === "function") {
+            const containsHtml =
+              msg.content.includes("<img") ||
+              msg.content.includes("<p>") ||
+              msg.content.includes("<br>");
+
             chat["addMessage"](
               msg.content,
-              msg.sender === "user" ? "user" : "assistant"
+              msg.sender === "user" ? "user" : "assistant",
+              containsHtml
             );
           }
         });
@@ -308,8 +344,11 @@ export function createAssistant(options: AssistantOptions): Assistant {
       // Create an emergency chat that displays the error
       chat = new Chat({
         ...chatOptions,
-        onSend: async () =>
-          "The assistant is not available at this time. Please try again later.",
+        onSend: async () => ({
+          content:
+            "The assistant is not available at this time. Please try again later.",
+          isHtml: false,
+        }),
         initialMessage:
           "Sorry, I couldn't connect to the server. Please check your connection and try again.",
       });
