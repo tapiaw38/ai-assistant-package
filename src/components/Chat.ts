@@ -161,6 +161,27 @@ export class Chat {
     this.inputArea = document.createElement("div");
     this.inputArea.className = "ia-chat-input-area";
 
+    // Checkbox for showing images
+    const checkboxContainer = document.createElement("div");
+    checkboxContainer.className = "ia-chat-checkbox-container";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.id = "ia-show-images";
+    checkbox.className = "ia-chat-checkbox";
+    checkbox.title =
+      "Al activar esta opción tu respuesta puede demorar más de lo esperado";
+
+    const label = document.createElement("label");
+    label.htmlFor = "ia-show-images";
+    label.className = "ia-chat-checkbox-label";
+    label.textContent = "Mostrar imágenes en la respuesta";
+    label.title =
+      "Al activar esta opción tu respuesta puede demorar más de lo esperado";
+
+    checkboxContainer.appendChild(checkbox);
+    checkboxContainer.appendChild(label);
+
     // CHANGE: Create div wrapper for the textarea for better control
     const textareaWrapper = document.createElement("div");
     textareaWrapper.className = "ia-chat-input-wrapper";
@@ -191,6 +212,7 @@ export class Chat {
     // Assemble components
     this.chatWindow.appendChild(header);
     this.chatWindow.appendChild(this.messageList);
+    this.chatWindow.appendChild(checkboxContainer);
     this.chatWindow.appendChild(this.inputArea);
     this.container.appendChild(this.chatWindow);
   }
@@ -591,6 +613,17 @@ export class Chat {
   }
 
   /**
+   * Gets the state of the show images checkbox
+   * @returns boolean indicating if images should be shown
+   */
+  public getShowImages(): boolean {
+    const checkbox = this.chatWindow.querySelector(
+      "#ia-show-images"
+    ) as HTMLInputElement;
+    return checkbox ? checkbox.checked : false;
+  }
+
+  /**
    * Loads the necessary CSS styles
    */
   private loadStyles(): void {
@@ -883,6 +916,34 @@ export class Chat {
       .ia-chat-input {
         scrollbar-width: thin;
         scrollbar-color: ${inputBorderColor} ${inputBgColor};
+      }
+
+      .ia-chat-checkbox-container {
+        padding: 12px 12px;
+        border-top: 1px solid #e0e0e0;
+        background-color: #f8f9fa;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .ia-chat-checkbox {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: ${primaryColor};
+      }
+
+      .ia-chat-checkbox-label {
+        font-size: 12px;
+        color: ${primaryColor};
+        cursor: pointer;
+        user-select: none;
+        margin: 0;
+      }
+      
+      .ia-chat-checkbox-label:hover {
+        color: ${primaryColor};
       }
 
       .ia-chat-message img {

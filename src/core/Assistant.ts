@@ -222,25 +222,28 @@ export function createAssistant(options: AssistantOptions): Assistant {
       lastContext = normalizedContext;
     }
 
+    // Get checkbox state and add query parameter
+    const showImages =
+      chat && chat.getShowImages ? chat.getShowImages() : false;
+    const imageProcessorParam = showImages ? "activate" : "deactivate";
+    const url = `${options.apiBaseUrl}/conversation/${conversationId}/message?has_image_processor=${imageProcessorParam}`;
+
     try {
-      const response = await fetch(
-        `${options.apiBaseUrl}/conversation/${conversationId}/message`,
-        {
-          method: "POST",
-          mode: "cors",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": `${options.apiKey}`,
-          },
-          body: JSON.stringify({
-            content: message,
-            context: contextToSend,
-            contextHash: contextToSend
-              ? btoa(contextToSend.substring(0, 100))
-              : null,
-          }),
-        }
-      );
+      const response = await fetch(url, {
+        method: "POST",
+        mode: "cors",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": `${options.apiKey}`,
+        },
+        body: JSON.stringify({
+          content: message,
+          context: contextToSend,
+          contextHash: contextToSend
+            ? btoa(contextToSend.substring(0, 100))
+            : null,
+        }),
+      });
 
       if (!response.ok) {
         throw new Error(`Error sending message: ${response.status}`);
