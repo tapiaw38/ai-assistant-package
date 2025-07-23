@@ -266,25 +266,34 @@ export function createAssistant(options: AssistantOptions): Assistant {
     }
   }
 
-  // Logic to create a conversation on startup
-  async function createConversationAndMountChat() {
+  // Logic to create or load a conversation on startup
+  async function initConversationAndMountChat() {
     try {
-      const response = await fetch(`${options.apiBaseUrl}/conversation/`, {
-        method: "POST",
-        mode: "cors",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `bearer ${options.apiKey}`,
-        },
-        body: JSON.stringify({ title: chatOptions.title }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error creating conversation: ${response.status}`);
+      // Check for existing conversations
+      const conversations = await fetchAllConversations();
+      let useExisting = false;
+      if (conversations.length > 0) {
+        // Use the first conversation
+        const lastConv = conversations[0];
+        conversationId = lastConv.id;
+        useExisting = true;
+      } else {
+        // Create a new conversation
+        const response = await fetch(`${options.apiBaseUrl}/conversation/`, {
+          method: "POST",
+          mode: "cors",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${options.apiKey}`,
+          },
+          body: JSON.stringify({ title: chatOptions.title }),
+        });
+        if (!response.ok) {
+          throw new Error(`Error creating conversation: ${response.status}`);
+        }
+        const data = await response.json();
+        conversationId = data.data.id;
       }
-
-      const data = await response.json();
-      conversationId = data.data.id;
 
       // Instantiate the chat with the internal send function
       chat = new Chat({
@@ -318,8 +327,29 @@ export function createAssistant(options: AssistantOptions): Assistant {
       });
       chat.mount(options.container || document.body);
 
-      // Load message history
-      if (conversationId && chat) {
+      // Set the callback for the new conversation button
+      chat.setOnNewConversation(async () => {
+        const response = await fetch(`${options.apiBaseUrl}/conversation/`, {
+          method: "POST",
+          mode: "cors",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${options.apiKey}`,
+          },
+          body: JSON.stringify({ title: chatOptions.title }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          conversationId = data.data.id;
+          lastContext = "";
+          if (chat && typeof chat["clearMessages"] === "function") {
+            chat["clearMessages"]();
+          }
+        }
+      });
+
+      // Load message history if using existing conversation
+      if (conversationId && chat && useExisting) {
         const messages = await fetchMessages(conversationId);
         messages.forEach((msg: any) => {
           if (chat && typeof chat["addMessage"] === "function") {
@@ -364,7 +394,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
   }
 
   // Start the conversation and mount the chat
-  createConversationAndMountChat();
+  initConversationAndMountChat();
 
   // Configure interaction
   button.setOnClick(() => {

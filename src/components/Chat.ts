@@ -73,6 +73,8 @@ export class Chat {
   private inputArea: HTMLDivElement;
   private isOpen: boolean = false;
   private options: Required<ChatOptions>;
+  private onNewConversationCallback?: () => void;
+  private newConvButton?: HTMLButtonElement;
 
   /**
    * Creates a new Chat instance
@@ -144,13 +146,47 @@ export class Chat {
     title.className = "ia-chat-title";
     title.textContent = this.options.title;
 
+    // New conversation button (+)
+    const newConvButton = document.createElement("button");
+    newConvButton.className = "ia-chat-new-conv";
+    newConvButton.innerHTML = "+";
+    newConvButton.title = "Nueva conversación";
+    newConvButton.setAttribute("type", "button");
+    // Match close button style, but remove right margin
+    newConvButton.style.background = "none";
+    newConvButton.style.border = "none";
+    newConvButton.style.color = "white";
+    newConvButton.style.fontSize = "24px";
+    newConvButton.style.cursor = "pointer";
+    newConvButton.style.padding = "0";
+    newConvButton.style.marginLeft = "60px";
+    newConvButton.style.marginRight = "2px";
+    newConvButton.style.lineHeight = "1";
+    newConvButton.style.outline = "none";
+
+    this.newConvButton = newConvButton;
+    if (this.onNewConversationCallback) {
+      newConvButton.onclick = this.onNewConversationCallback;
+    }
+
+    // Close button
     const closeButton = document.createElement("button");
     closeButton.className = "ia-chat-close";
     closeButton.innerHTML = "&times;";
     closeButton.setAttribute("aria-label", "Close chat");
     closeButton.setAttribute("type", "button");
+    closeButton.style.background = "none";
+    closeButton.style.border = "none";
+    closeButton.style.color = "white";
+    closeButton.style.fontSize = "24px";
+    closeButton.style.cursor = "pointer";
+    closeButton.style.padding = "0";
+    closeButton.style.marginLeft = "0";
+    closeButton.style.lineHeight = "1";
+    closeButton.style.outline = "none";
 
     header.appendChild(title);
+    header.appendChild(newConvButton);
     header.appendChild(closeButton);
 
     // Message list
@@ -621,6 +657,32 @@ export class Chat {
       "#ia-show-images"
     ) as HTMLInputElement;
     return checkbox ? checkbox.checked : false;
+  }
+
+  /**
+   * Sets the callback for the new conversation button
+   */
+  public setOnNewConversation(callback: () => void): void {
+    this.onNewConversationCallback = callback;
+    if (this.newConvButton) {
+      this.newConvButton.onclick = callback;
+    }
+  }
+
+  /**
+   * Borra todos los mensajes del chat y reinicia el estado visual
+   */
+  public clearMessages(): void {
+    if (this.messageList) {
+      this.messageList.innerHTML = "";
+    }
+    // Opcional: limpiar el textarea
+    const textarea = this.chatWindow.querySelector(
+      ".ia-chat-input"
+    ) as HTMLTextAreaElement;
+    if (textarea) {
+      this.resetTextarea(textarea);
+    }
   }
 
   /**
