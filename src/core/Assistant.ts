@@ -120,6 +120,8 @@ export function createAssistant(options: AssistantOptions): Assistant {
   const button = new FloatingButton(buttonOptions);
   let chat: Chat | null = null;
   let conversationId: string | null = null;
+  let conversationClientId: string | null = null;
+  let lastConversationClientId: string | null = null;
   let pendingOpen = false;
   let lastContext: string = "";
 
@@ -269,16 +271,44 @@ export function createAssistant(options: AssistantOptions): Assistant {
   // Logic to create or load a conversation on startup
   async function initConversationAndMountChat() {
     try {
-      // Check for existing conversations
+      // Get client_id from localStorage
+      const storedClientId = localStorage.getItem("ai-client-id");
+      // Fetch all conversations
       const conversations = await fetchAllConversations();
       let useExisting = false;
       if (conversations.length > 0) {
-        // Use the first conversation
-        const lastConv = conversations[0];
-        conversationId = lastConv.id;
-        useExisting = true;
+        const firstConv = conversations[0];
+        conversationId = firstConv.id;
+        lastConversationClientId = firstConv.client_id;
+        // If the client_id matches, use this conversation
+        if (storedClientId && storedClientId === firstConv.client_id) {
+          useExisting = true;
+          // Ensure client_id is in localStorage
+          localStorage.setItem("ai-client-id", firstConv.client_id);
+        } else {
+          // Create a new conversation and update localStorage
+          const response = await fetch(`${options.apiBaseUrl}/conversation/`, {
+            method: "POST",
+            mode: "cors",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${options.apiKey}`,
+            },
+            body: JSON.stringify({ title: chatOptions.title }),
+          });
+          if (!response.ok) {
+            throw new Error(`Error creating conversation: ${response.status}`);
+          }
+          const data = await response.json();
+          conversationId = data.data.id;
+          conversationClientId = data.data.client_id;
+          if (conversationClientId) {
+            localStorage.setItem("ai-client-id", conversationClientId);
+          }
+          useExisting = false;
+        }
       } else {
-        // Create a new conversation
+        // No conversations, create a new one
         const response = await fetch(`${options.apiBaseUrl}/conversation/`, {
           method: "POST",
           mode: "cors",
@@ -293,6 +323,11 @@ export function createAssistant(options: AssistantOptions): Assistant {
         }
         const data = await response.json();
         conversationId = data.data.id;
+        conversationClientId = data.data.client_id;
+        if (conversationClientId) {
+          localStorage.setItem("ai-client-id", conversationClientId);
+        }
+        useExisting = false;
       }
 
       // Instantiate the chat with the internal send function
@@ -341,6 +376,10 @@ export function createAssistant(options: AssistantOptions): Assistant {
         if (response.ok) {
           const data = await response.json();
           conversationId = data.data.id;
+          conversationClientId = data.data.client_id;
+          if (conversationClientId) {
+            localStorage.setItem("ai-client-id", conversationClientId);
+          }
           lastContext = "";
           if (chat && typeof chat["clearMessages"] === "function") {
             chat["clearMessages"]();
@@ -349,7 +388,12 @@ export function createAssistant(options: AssistantOptions): Assistant {
       });
 
       // Load message history if using existing conversation
-      if (conversationId && chat && useExisting) {
+      if (
+        conversationId &&
+        chat &&
+        useExisting &&
+        localStorage.getItem("ai-client-id") === lastConversationClientId
+      ) {
         const messages = await fetchMessages(conversationId);
         messages.forEach((msg: any) => {
           if (chat && typeof chat["addMessage"] === "function") {

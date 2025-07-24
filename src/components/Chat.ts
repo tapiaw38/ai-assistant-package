@@ -149,14 +149,14 @@ export class Chat {
     // New conversation button (+)
     const newConvButton = document.createElement("button");
     newConvButton.className = "ia-chat-new-conv";
-    newConvButton.innerHTML = "+";
+    newConvButton.innerHTML = "Nueva conversación";
     newConvButton.title = "Nueva conversación";
     newConvButton.setAttribute("type", "button");
     // Match close button style, but remove right margin
     newConvButton.style.background = "none";
     newConvButton.style.border = "none";
     newConvButton.style.color = "white";
-    newConvButton.style.fontSize = "24px";
+    newConvButton.style.fontSize = "11px";
     newConvButton.style.cursor = "pointer";
     newConvButton.style.padding = "0";
     newConvButton.style.marginLeft = "60px";
@@ -459,7 +459,7 @@ export class Chat {
    * Sanitizes HTML to allow only safe tags for assistant messages
    */
   private sanitizeHtml(html: string): string {
-    // Crear un elemento temporal para limpiar el HTML
+    // Create a temporary element to clean the HTML
     const temp = document.createElement("div");
     temp.innerHTML = html;
 
@@ -670,13 +670,13 @@ export class Chat {
   }
 
   /**
-   * Borra todos los mensajes del chat y reinicia el estado visual
+   * Clears all chat messages and resets the visual state
    */
   public clearMessages(): void {
     if (this.messageList) {
       this.messageList.innerHTML = "";
     }
-    // Opcional: limpiar el textarea
+    // Optionally: clear the textarea
     const textarea = this.chatWindow.querySelector(
       ".ia-chat-input"
     ) as HTMLTextAreaElement;
