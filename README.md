@@ -56,7 +56,8 @@ const assistant = createAssistant({
   position: "bottom-right", // 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'
   initialMessage: "Hello! I am your virtual assistant. How can I help you?",
   autoOpen: false, // If true, the chat will open automatically
-
+  // Experimental: Enable image search in responses (may slow down replies)
+  searchImages: false, // If true, the assistant will try to include images in the response. This is experimental and may make responses slower,
   // Specific button options
   buttonOptions: {
     backgroundColor: "#4a90e2",
@@ -81,6 +82,19 @@ const assistant = createAssistant({
   },
 });
 ```
+
+### Experimental option: image search
+
+If you want the assistant to be able to show images in the responses, you can enable the `searchImages` option. This feature is experimental and, when enabled, may cause responses to take longer, as the assistant will try to find and process relevant images for the conversation.
+
+```javascript
+const assistant = createAssistant({
+  // ...other options...
+  searchImages: true, // Experimental: enables image search in responses
+});
+```
+
+When disabled (`false`, the default value), the option to show images will not appear in the chat interface.
 
 ## Methods
 

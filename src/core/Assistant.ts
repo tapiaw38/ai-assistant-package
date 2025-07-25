@@ -22,6 +22,8 @@ export interface AssistantOptions {
   position?: ChatPosition;
   /** Initial message from the assistant */
   initialMessage?: string;
+  /** Whether to search for images in the context */
+  searchImages?: boolean; // experimental feature, your search may go slower
   /** Specific options for the floating button */
   buttonOptions?: {
     /** Background color of the button */
@@ -83,8 +85,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
     container: options.buttonOptions?.container || document.body,
   };
 
-  // Chat options (without onSend, it will be handled internally)
-  const chatOptions: ChatOptions = {
+  const chatOptions: ChatOptions & { showImagesOption?: boolean } = {
     title: options.title || "Nymia IA Assistant",
     placeholder: options.placeholder || "Write your message here...",
     position: options.position || "bottom-right",
@@ -114,6 +115,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
         options.theme?.inputTextColor || options.theme?.textColor || "#333333",
     },
     isOpen: options.autoOpen || false,
+    showImagesOption: options.searchImages ?? false,
   };
 
   // Create components

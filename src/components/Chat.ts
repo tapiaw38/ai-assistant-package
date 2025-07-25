@@ -60,6 +60,8 @@ export interface ChatOptions {
   theme?: ChatTheme;
   /** Whether it should be open on startup */
   isOpen?: boolean;
+  /** Mostrar opción de imágenes (checkbox) */
+  showImagesOption?: boolean;
 }
 
 /**
@@ -72,7 +74,7 @@ export class Chat {
   private messageList: HTMLDivElement;
   private inputArea: HTMLDivElement;
   private isOpen: boolean = false;
-  private options: Required<ChatOptions>;
+  private options: Required<ChatOptions> & { showImagesOption?: boolean };
   private onNewConversationCallback?: () => void;
   private newConvButton?: HTMLButtonElement;
 
@@ -112,6 +114,7 @@ export class Chat {
           "#333333",
       },
       isOpen: options.isOpen || false,
+      showImagesOption: !!options.showImagesOption,
     };
 
     this.createChatElements();
@@ -200,6 +203,8 @@ export class Chat {
     // Checkbox for showing images
     const checkboxContainer = document.createElement("div");
     checkboxContainer.className = "ia-chat-checkbox-container";
+    checkboxContainer.style.display =
+      this.options.showImagesOption === false ? "none" : "flex";
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
