@@ -62,6 +62,8 @@ export interface ChatOptions {
   isOpen?: boolean;
   /** Mostrar opción de imágenes (checkbox) */
   showImagesOption?: boolean;
+  /** Enable audio answers (hide text, show audio player) */
+  audioAnswers?: boolean;
 }
 
 /**
@@ -74,7 +76,10 @@ export class Chat {
   private messageList: HTMLDivElement;
   private inputArea: HTMLDivElement;
   private isOpen: boolean = false;
-  private options: Required<ChatOptions> & { showImagesOption?: boolean };
+  private options: Required<Omit<ChatOptions, "audioAnswers">> & {
+    showImagesOption?: boolean;
+    audioAnswers?: boolean;
+  };
   private onNewConversationCallback?: () => void;
   private newConvButton?: HTMLButtonElement;
 
@@ -115,6 +120,9 @@ export class Chat {
       },
       isOpen: options.isOpen || false,
       showImagesOption: !!options.showImagesOption,
+      ...(typeof options.audioAnswers !== "undefined"
+        ? { audioAnswers: !!options.audioAnswers }
+        : {}),
     };
 
     this.createChatElements();
@@ -321,6 +329,26 @@ export class Chat {
         this.toggle();
       }
     });
+
+    // Reproducir audio si existe un botón de audio
+    this.messageList.addEventListener("click", (e) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.classList.contains("ia-audio-play-btn") ||
+        target.closest(".ia-audio-play-btn")
+      ) {
+        const btn = target.classList.contains("ia-audio-play-btn")
+          ? target
+          : target.closest(".ia-audio-play-btn");
+        const audio = btn?.parentElement?.querySelector(
+          ".ia-audio-player"
+        ) as HTMLAudioElement;
+        if (audio) {
+          audio.style.display = "block";
+          audio.play();
+        }
+      }
+    });
   }
 
   /**
@@ -433,6 +461,46 @@ export class Chat {
   ): void {
     const messageElement = document.createElement("div");
     messageElement.className = `ia-chat-message ${sender}`;
+
+    // Si audioAnswers está activo y es respuesta del asistente, buscar audio_url
+    if (this.options.audioAnswers && sender === "assistant") {
+      // Regex más flexible que maneja saltos de línea y espacios
+      const audioUrlMatch = text.match(/"audio_url"\s*:\s*"([^"]+)"/s);
+      if (audioUrlMatch) {
+        const audioUrl = audioUrlMatch[1];
+
+        // Crear SOLO el botón de audio estilo WhatsApp (SIN TEXTO)
+        const audioContainer = document.createElement("div");
+        audioContainer.className = "ia-audio-container";
+
+        const playButton = document.createElement("button");
+        playButton.className = "ia-audio-play-btn";
+        playButton.innerHTML = `
+          <svg class="ia-audio-icon" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+          Audio
+        `;
+
+        const audioPlayer = document.createElement("audio");
+        audioPlayer.className = "ia-audio-player";
+        audioPlayer.src = audioUrl;
+        audioPlayer.controls = true;
+        audioPlayer.style.display = "none";
+
+        audioContainer.appendChild(playButton);
+        audioContainer.appendChild(audioPlayer);
+        messageElement.appendChild(audioContainer);
+
+        this.messageList.appendChild(messageElement);
+        this.scrollToBottom();
+        return; // IMPORTANTE: Sale aquí, NO procesa texto
+      }
+
+      // Si audioAnswers está activo pero no hay audio_url, no mostrar nada
+      // Esto evita que se muestre texto cuando debería ser solo audio
+      return;
+    }
 
     if (isHtml && sender === "assistant") {
       // If the message is HTML, sanitize it before inserting
@@ -662,6 +730,14 @@ export class Chat {
       "#ia-show-images"
     ) as HTMLInputElement;
     return checkbox ? checkbox.checked : false;
+  }
+
+  /**
+   * Gets the audio answers setting from options
+   * @returns boolean indicating if audio answers are enabled
+   */
+  public getAudioAnswers(): boolean {
+    return !!this.options.audioAnswers;
   }
 
   /**
@@ -1029,6 +1105,75 @@ export class Chat {
       .ia-chat-message p {
         margin: 5px 0;
         line-height: 1.4;
+      }
+
+      .ia-audio-player {
+        display: none;
+        width: 100%;
+        margin-top: 8px;
+      }
+
+      .ia-audio-container {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-width: 250px;
+      }
+
+      .ia-audio-play-btn {
+        background-color: ${primaryColor};
+        color: white;
+        border: none;
+        border-radius: 20px;
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        outline: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        min-width: 120px;
+        justify-content: center;
+      }
+
+      .ia-audio-play-btn:hover {
+        background-color: ${this.darkenColor(primaryColor || "#4a90e2", 10)};
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+      }
+
+      .ia-audio-play-btn:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+
+      .ia-audio-icon {
+        width: 16px;
+        height: 16px;
+        display: inline-block;
+        fill: white;
+        flex-shrink: 0;
+      }
+
+      .ia-audio-player {
+        width: 100%;
+        margin-top: 8px;
+        border-radius: 8px;
+        outline: none;
+      }
+
+      .ia-audio-player::-webkit-media-controls-panel {
+        background-color: ${assistantMessageBgColor};
+        border-radius: 8px;
+      }
+
+      .ia-audio-player::-webkit-media-controls-play-button,
+      .ia-audio-player::-webkit-media-controls-pause-button {
+        background-color: ${primaryColor};
+        border-radius: 50%;
       }
     `;
 

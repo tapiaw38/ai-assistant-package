@@ -58,6 +58,8 @@ const assistant = createAssistant({
   autoOpen: false, // If true, the chat will open automatically
   // Experimental: Enable image search in responses (may slow down replies)
   searchImages: false, // If true, the assistant will try to include images in the response. This is experimental and may make responses slower,
+  // Enable audio responses (replaces text with audio player)
+  audioAnswers: false, // If true, assistant responses will be played as audio with a WhatsApp-style play button
   // Specific button options
   buttonOptions: {
     backgroundColor: "#4a90e2",
@@ -95,6 +97,40 @@ const assistant = createAssistant({
 ```
 
 When disabled (`false`, the default value), the option to show images will not appear in the chat interface.
+
+### Audio Responses
+
+The library now supports audio responses from the assistant. When enabled, instead of showing text responses, the assistant will display an audio player with a WhatsApp-style play button.
+
+```javascript
+const assistant = createAssistant({
+  // ...other options...
+  audioAnswers: true, // Enable audio responses
+});
+```
+
+**How it works:**
+
+1. When `audioAnswers` is set to `true`, the library automatically adds `has_text_to_voice=activate` to the API query parameters
+2. The API should return a response containing an `audio_url` field with the audio file URL
+3. Instead of displaying text, the chat will show a play button that allows users to listen to the response
+4. The audio player appears with a clean, WhatsApp-inspired design
+
+**Expected API Response Format:**
+
+```json
+{
+  "response": "Your text response here",
+  "audio_url": "https://example.com/path/to/audio.wav"
+}
+```
+
+**Features:**
+
+- WhatsApp-style play button with audio icon
+- Clean audio player interface
+- Automatic detection of audio URLs in responses
+- Seamless integration with existing chat functionality
 
 ## Methods
 

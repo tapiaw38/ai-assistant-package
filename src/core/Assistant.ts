@@ -24,6 +24,8 @@ export interface AssistantOptions {
   initialMessage?: string;
   /** Whether to search for images in the context */
   searchImages?: boolean; // experimental feature, your search may go slower
+  /** Enable audio responses (replaces text with audio player) */
+  audioAnswers?: boolean;
   /** Specific options for the floating button */
   buttonOptions?: {
     /** Background color of the button */
@@ -116,6 +118,7 @@ export function createAssistant(options: AssistantOptions): Assistant {
     },
     isOpen: options.autoOpen || false,
     showImagesOption: options.searchImages ?? false,
+    audioAnswers: options.audioAnswers ?? false,
   };
 
   // Create components
@@ -230,7 +233,13 @@ export function createAssistant(options: AssistantOptions): Assistant {
     const showImages =
       chat && chat.getShowImages ? chat.getShowImages() : false;
     const imageProcessorParam = showImages ? "activate" : "deactivate";
-    const url = `${options.apiBaseUrl}/conversation/${conversationId}/message?has_image_processor=${imageProcessorParam}`;
+
+    // Get audio answers state and add query parameter
+    const audioAnswers =
+      chat && chat.getAudioAnswers ? chat.getAudioAnswers() : false;
+    const textToVoiceParam = audioAnswers ? "activate" : "deactivate";
+
+    const url = `${options.apiBaseUrl}/conversation/${conversationId}/message?has_image_processor=${imageProcessorParam}&has_text_to_voice=${textToVoiceParam}`;
 
     try {
       const response = await fetch(url, {
@@ -258,7 +267,17 @@ export function createAssistant(options: AssistantOptions): Assistant {
         .reverse()
         .find((msg: any) => msg.sender === "assistant");
 
+      console.log(assistantMsg);
+
       if (assistantMsg) {
+        // Si audioAnswers está activado, devolver la respuesta completa con audio_url
+        if (audioAnswers && assistantMsg.audio_url) {
+          return JSON.stringify({
+            content: assistantMsg.content,
+            audio_url: assistantMsg.audio_url,
+          });
+        }
+
         // Process the content to clean HTML and improve styles
         return processHtmlContent(assistantMsg.content);
       }
@@ -345,15 +364,18 @@ export function createAssistant(options: AssistantOptions): Assistant {
             const response = await sendMessageToApi(trimmedMessage);
             textarea.value = "";
 
-            // Verify if the response contains HTML
+            // Verify if the response contains HTML or audio_url
             const containsHtml =
               response.includes("<img") ||
               response.includes("<p>") ||
               response.includes("<br>");
 
+            // Si la respuesta contiene audio_url, marcarla como HTML para procesamiento
+            const containsAudio = response.includes("audio_url");
+
             return {
               content: response,
-              isHtml: containsHtml,
+              isHtml: containsHtml || containsAudio,
             };
           }
           return {
@@ -399,15 +421,32 @@ export function createAssistant(options: AssistantOptions): Assistant {
         const messages = await fetchMessages(conversationId);
         messages.forEach((msg: any) => {
           if (chat && typeof chat["addMessage"] === "function") {
+            let messageContent = msg.content;
+
+            // Si audioAnswers está activado y el mensaje del asistente tiene audio_url
+            if (
+              chatOptions.audioAnswers &&
+              msg.sender === "assistant" &&
+              msg.audio_url
+            ) {
+              messageContent = JSON.stringify({
+                content: msg.content,
+                audio_url: msg.audio_url,
+              });
+            }
+
             const containsHtml =
-              msg.content.includes("<img") ||
-              msg.content.includes("<p>") ||
-              msg.content.includes("<br>");
+              messageContent.includes("<img") ||
+              messageContent.includes("<p>") ||
+              messageContent.includes("<br>");
+
+            // Si la respuesta contiene audio_url, marcarla como HTML para procesamiento
+            const containsAudio = messageContent.includes("audio_url");
 
             chat["addMessage"](
-              msg.content,
+              messageContent,
               msg.sender === "user" ? "user" : "assistant",
-              containsHtml
+              containsHtml || containsAudio
             );
           }
         });
