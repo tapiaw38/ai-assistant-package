@@ -270,7 +270,6 @@ export function createAssistant(options: AssistantOptions): Assistant {
       console.log(assistantMsg);
 
       if (assistantMsg) {
-        // Si audioAnswers está activado, devolver la respuesta completa con audio_url
         if (audioAnswers && assistantMsg.audio_url) {
           return JSON.stringify({
             content: assistantMsg.content,
@@ -370,7 +369,6 @@ export function createAssistant(options: AssistantOptions): Assistant {
               response.includes("<p>") ||
               response.includes("<br>");
 
-            // Si la respuesta contiene audio_url, marcarla como HTML para procesamiento
             const containsAudio = response.includes("audio_url");
 
             return {
@@ -423,7 +421,6 @@ export function createAssistant(options: AssistantOptions): Assistant {
           if (chat && typeof chat["addMessage"] === "function") {
             let messageContent = msg.content;
 
-            // Si audioAnswers está activado y el mensaje del asistente tiene audio_url
             if (
               chatOptions.audioAnswers &&
               msg.sender === "assistant" &&
@@ -440,7 +437,6 @@ export function createAssistant(options: AssistantOptions): Assistant {
               messageContent.includes("<p>") ||
               messageContent.includes("<br>");
 
-            // Si la respuesta contiene audio_url, marcarla como HTML para procesamiento
             const containsAudio = messageContent.includes("audio_url");
 
             chat["addMessage"](

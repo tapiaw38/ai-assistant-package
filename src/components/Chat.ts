@@ -60,7 +60,7 @@ export interface ChatOptions {
   theme?: ChatTheme;
   /** Whether it should be open on startup */
   isOpen?: boolean;
-  /** Mostrar opción de imágenes (checkbox) */
+  /** Show images option (checkbox) */
   showImagesOption?: boolean;
   /** Enable audio answers (hide text, show audio player) */
   audioAnswers?: boolean;
@@ -462,14 +462,11 @@ export class Chat {
     const messageElement = document.createElement("div");
     messageElement.className = `ia-chat-message ${sender}`;
 
-    // Si audioAnswers está activo y es respuesta del asistente, buscar audio_url
     if (this.options.audioAnswers && sender === "assistant") {
-      // Regex más flexible que maneja saltos de línea y espacios
       const audioUrlMatch = text.match(/"audio_url"\s*:\s*"([^"]+)"/s);
       if (audioUrlMatch) {
         const audioUrl = audioUrlMatch[1];
 
-        // Crear SOLO el botón de audio estilo WhatsApp (SIN TEXTO)
         const audioContainer = document.createElement("div");
         audioContainer.className = "ia-audio-container";
 
@@ -494,11 +491,9 @@ export class Chat {
 
         this.messageList.appendChild(messageElement);
         this.scrollToBottom();
-        return; // IMPORTANTE: Sale aquí, NO procesa texto
+        return;
       }
 
-      // Si audioAnswers está activo pero no hay audio_url, no mostrar nada
-      // Esto evita que se muestre texto cuando debería ser solo audio
       return;
     }
 
