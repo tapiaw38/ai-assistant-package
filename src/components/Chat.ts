@@ -251,29 +251,55 @@ export class Chat {
     textarea.style.resize = "none";
     textarea.setAttribute("aria-label", "Message");
 
-    // Create send button or audio record button based on audioAnswers setting
-    const actionButton = document.createElement("button");
+    // Create buttons based on audioAnswers setting
+    console.log(
+      "Creating buttons with audioAnswers:",
+      this.options.audioAnswers
+    );
+
     if (this.options.audioAnswers) {
-      actionButton.className = "ia-chat-record";
-      actionButton.innerHTML = `
+      console.log("Creating both send and record buttons");
+
+      // Create send button
+      const sendButton = document.createElement("button");
+      sendButton.className = "ia-chat-send";
+      sendButton.innerHTML = "&#10148;";
+      sendButton.setAttribute("aria-label", "Send message");
+      sendButton.setAttribute("type", "button");
+
+      // Create record button
+      const recordButton = document.createElement("button");
+      recordButton.className = "ia-chat-record";
+      recordButton.innerHTML = `
         <svg viewBox="0 0 24 24" width="20" height="20">
           <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
           <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
         </svg>
       `;
-      actionButton.setAttribute("aria-label", "Record audio message");
-      actionButton.title = "Mantén presionado para grabar audio";
-    } else {
-      actionButton.className = "ia-chat-send";
-      actionButton.innerHTML = "&#10148;";
-      actionButton.setAttribute("aria-label", "Send message");
-    }
-    actionButton.setAttribute("type", "button");
+      recordButton.setAttribute("aria-label", "Record audio message");
+      recordButton.setAttribute("type", "button");
+      recordButton.title = "Mantén presionado para grabar audio";
 
-    // CHANGE: Add the textarea to the wrapper, then the wrapper to the inputArea
-    textareaWrapper.appendChild(textarea);
-    this.inputArea.appendChild(textareaWrapper);
-    this.inputArea.appendChild(actionButton);
+      // Add textarea and both buttons to input area
+      textareaWrapper.appendChild(textarea);
+      this.inputArea.appendChild(textareaWrapper);
+      this.inputArea.appendChild(sendButton);
+      this.inputArea.appendChild(recordButton);
+    } else {
+      console.log("Creating only send button");
+
+      // Create only send button
+      const sendButton = document.createElement("button");
+      sendButton.className = "ia-chat-send";
+      sendButton.innerHTML = "&#10148;";
+      sendButton.setAttribute("aria-label", "Send message");
+      sendButton.setAttribute("type", "button");
+
+      // Add textarea and send button to input area
+      textareaWrapper.appendChild(textarea);
+      this.inputArea.appendChild(textareaWrapper);
+      this.inputArea.appendChild(sendButton);
+    }
 
     // Assemble components
     this.chatWindow.appendChild(header);
@@ -297,19 +323,31 @@ export class Chat {
       closeButton.blur();
     });
 
-    // Handle action button (send or record)
+    // Handle action buttons
     if (this.options.audioAnswers) {
+      // Setup both send and record buttons
+      const sendButton = this.chatWindow.querySelector(
+        ".ia-chat-send"
+      ) as HTMLButtonElement;
       const recordButton = this.chatWindow.querySelector(
         ".ia-chat-record"
       ) as HTMLButtonElement;
+
+      // Send button event listener
+      sendButton.addEventListener("click", () => {
+        this.sendMessage();
+        sendButton.blur();
+      });
+
+      // Record button event listener
       this.setupAudioRecording(recordButton);
     } else {
+      // Setup only send button
       const sendButton = this.chatWindow.querySelector(
         ".ia-chat-send"
       ) as HTMLButtonElement;
       sendButton.addEventListener("click", () => {
         this.sendMessage();
-        // Remove focus from the button after clicking
         sendButton.blur();
       });
     }
