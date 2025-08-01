@@ -194,6 +194,100 @@ export function createAssistant(options: AssistantOptions): Assistant {
     return processedContent;
   }
 
+  // Function to send FormData message (with audio)
+  async function sendFormDataToApi(formData: FormData): Promise<string> {
+    if (!conversationId) return "No active conversation.";
+
+    // Get context from FormData or generate it
+    let context = (formData.get("context") as string) || "";
+
+    if (context === "") {
+      const mainContent = document.querySelector(
+        'main, article, .content, #content, [role="main"]'
+      ) as HTMLElement;
+      if (mainContent) {
+        context = mainContent.innerText;
+      } else {
+        const body = document.body.cloneNode(true) as HTMLElement;
+        const elementsToRemove = body.querySelectorAll(
+          "nav, header, footer, .sidebar, .navigation, .menu, .ads, script, style, .cookie-banner"
+        );
+        elementsToRemove.forEach((el) => el.remove());
+        context = body.innerText;
+      }
+    }
+
+    const normalizedContext = context
+      .replace(/\s+/g, " ")
+      .trim()
+      .substring(0, 8000);
+
+    const contextToSend =
+      normalizedContext === lastContext ? "" : normalizedContext;
+
+    if (contextToSend !== "") {
+      lastContext = normalizedContext;
+    }
+
+    // Update FormData with processed context
+    formData.set("context", contextToSend);
+    formData.set(
+      "contextHash",
+      contextToSend ? btoa(contextToSend.substring(0, 100)) : ""
+    );
+
+    // Get audio answers state and add query parameter
+    const audioAnswers =
+      chat && chat.getAudioAnswers ? chat.getAudioAnswers() : false;
+    const textToVoiceParam = audioAnswers ? "activate" : "deactivate";
+
+    // Get checkbox state and add query parameter
+    const showImages =
+      chat && chat.getShowImages ? chat.getShowImages() : false;
+    const imageProcessorParam = showImages ? "activate" : "deactivate";
+
+    const url = `${options.apiBaseUrl}/conversation/${conversationId}/message?has_image_processor=${imageProcessorParam}&has_text_to_voice=${textToVoiceParam}`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        mode: "cors",
+        headers: {
+          "x-api-key": `${options.apiKey}`,
+        },
+        body: formData, // Send FormData directly
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error sending message: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const assistantMsg = data.data
+        .reverse()
+        .find((msg: any) => msg.sender === "assistant");
+
+      console.log(assistantMsg);
+
+      if (assistantMsg) {
+        if (audioAnswers && assistantMsg.audio_url) {
+          return JSON.stringify({
+            content: assistantMsg.content,
+            audio_url: assistantMsg.audio_url,
+          });
+        }
+
+        // Process the content to clean HTML and improve styles
+        return processHtmlContent(assistantMsg.content);
+      }
+
+      return "No response from the assistant.";
+    } catch (error) {
+      console.error("Error sending FormData message:", error);
+      return "Sorry, there was an error processing your audio message. Please try again.";
+    }
+  }
+
   // Function to send message
   async function sendMessageToApi(
     message: string,
@@ -353,12 +447,32 @@ export function createAssistant(options: AssistantOptions): Assistant {
       // Instantiate the chat with the internal send function
       chat = new Chat({
         ...chatOptions,
-        onSend: async (message: string) => {
+        onSend: async (message: string | FormData) => {
           const textarea = document.querySelector(
             ".ia-chat-input"
           ) as HTMLTextAreaElement;
-          const trimmedMessage = message.trim();
 
+          // Handle FormData (audio messages)
+          if (message instanceof FormData) {
+            const response = await sendFormDataToApi(message);
+            textarea.value = "";
+
+            // Verify if the response contains HTML or audio_url
+            const containsHtml =
+              response.includes("<img") ||
+              response.includes("<p>") ||
+              response.includes("<br>");
+
+            const containsAudio = response.includes("audio_url");
+
+            return {
+              content: response,
+              isHtml: containsHtml || containsAudio,
+            };
+          }
+
+          // Handle string messages (text only)
+          const trimmedMessage = message.trim();
           if (trimmedMessage) {
             const response = await sendMessageToApi(trimmedMessage);
             textarea.value = "";

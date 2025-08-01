@@ -49,7 +49,7 @@ export interface ChatOptions {
   height?: number;
   /** Function to execute when a message is sent */
   onSend?: (
-    message: string
+    message: any
   ) =>
     | Promise<string | { content: string; isHtml: boolean }>
     | string
@@ -82,6 +82,10 @@ export class Chat {
   };
   private onNewConversationCallback?: () => void;
   private newConvButton?: HTMLButtonElement;
+  private mediaRecorder?: MediaRecorder;
+  private audioChunks: Blob[] = [];
+  private isRecording: boolean = false;
+  private recordingTimer?: number;
 
   /**
    * Creates a new Chat instance
@@ -247,16 +251,29 @@ export class Chat {
     textarea.style.resize = "none";
     textarea.setAttribute("aria-label", "Message");
 
-    const sendButton = document.createElement("button");
-    sendButton.className = "ia-chat-send";
-    sendButton.innerHTML = "&#10148;";
-    sendButton.setAttribute("aria-label", "Send message");
-    sendButton.setAttribute("type", "button");
+    // Create send button or audio record button based on audioAnswers setting
+    const actionButton = document.createElement("button");
+    if (this.options.audioAnswers) {
+      actionButton.className = "ia-chat-record";
+      actionButton.innerHTML = `
+        <svg viewBox="0 0 24 24" width="20" height="20">
+          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+        </svg>
+      `;
+      actionButton.setAttribute("aria-label", "Record audio message");
+      actionButton.title = "Mantén presionado para grabar audio";
+    } else {
+      actionButton.className = "ia-chat-send";
+      actionButton.innerHTML = "&#10148;";
+      actionButton.setAttribute("aria-label", "Send message");
+    }
+    actionButton.setAttribute("type", "button");
 
     // CHANGE: Add the textarea to the wrapper, then the wrapper to the inputArea
     textareaWrapper.appendChild(textarea);
     this.inputArea.appendChild(textareaWrapper);
-    this.inputArea.appendChild(sendButton);
+    this.inputArea.appendChild(actionButton);
 
     // Assemble components
     this.chatWindow.appendChild(header);
@@ -280,15 +297,22 @@ export class Chat {
       closeButton.blur();
     });
 
-    // Send button
-    const sendButton = this.chatWindow.querySelector(
-      ".ia-chat-send"
-    ) as HTMLButtonElement;
-    sendButton.addEventListener("click", () => {
-      this.sendMessage();
-      // Remove focus from the button after clicking
-      sendButton.blur();
-    });
+    // Handle action button (send or record)
+    if (this.options.audioAnswers) {
+      const recordButton = this.chatWindow.querySelector(
+        ".ia-chat-record"
+      ) as HTMLButtonElement;
+      this.setupAudioRecording(recordButton);
+    } else {
+      const sendButton = this.chatWindow.querySelector(
+        ".ia-chat-send"
+      ) as HTMLButtonElement;
+      sendButton.addEventListener("click", () => {
+        this.sendMessage();
+        // Remove focus from the button after clicking
+        sendButton.blur();
+      });
+    }
 
     // Send with Enter, new line with Shift+Enter
     const textarea = this.chatWindow.querySelector(
@@ -352,6 +376,285 @@ export class Chat {
   }
 
   /**
+   * Sets up audio recording functionality for the record button
+   */
+  private setupAudioRecording(recordButton: HTMLButtonElement): void {
+    // Mouse events
+    recordButton.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      this.startRecordingTimer();
+    });
+
+    recordButton.addEventListener("mouseup", () => {
+      this.stopRecording();
+    });
+
+    recordButton.addEventListener("mouseleave", () => {
+      this.stopRecording();
+    });
+
+    // Touch events for mobile
+    recordButton.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      this.startRecordingTimer();
+    });
+
+    recordButton.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      this.stopRecording();
+    });
+
+    recordButton.addEventListener("touchcancel", (e) => {
+      e.preventDefault();
+      this.stopRecording();
+    });
+  }
+
+  /**
+   * Starts the recording timer and begins audio recording
+   */
+  private startRecordingTimer(): void {
+    this.recordingTimer = setTimeout(async () => {
+      await this.startAudioRecording();
+    }, 200); // Start recording after 200ms of holding
+  }
+
+  /**
+   * Starts audio recording
+   */
+  private async startAudioRecording(): Promise<void> {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.mediaRecorder = new MediaRecorder(stream);
+      this.audioChunks = [];
+      this.isRecording = true;
+
+      // Update button appearance
+      const recordButton = this.chatWindow.querySelector(
+        ".ia-chat-record"
+      ) as HTMLButtonElement;
+      recordButton.classList.add("recording");
+      recordButton.innerHTML = `
+        <svg viewBox="0 0 24 24" width="20" height="20">
+          <circle cx="12" cy="12" r="8" fill="red"/>
+        </svg>
+      `;
+
+      this.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          this.audioChunks.push(event.data);
+        }
+      };
+
+      this.mediaRecorder.onstop = () => {
+        this.processRecordedAudio();
+      };
+
+      this.mediaRecorder.start();
+    } catch (error) {
+      console.error("Error starting audio recording:", error);
+      this.addMessage("Error: No se pudo acceder al micrófono", "error");
+    }
+  }
+
+  /**
+   * Stops recording and processes the audio
+   */
+  private stopRecording(): void {
+    if (this.recordingTimer) {
+      clearTimeout(this.recordingTimer);
+      this.recordingTimer = undefined;
+    }
+
+    if (this.isRecording && this.mediaRecorder) {
+      this.mediaRecorder.stop();
+      this.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+      this.isRecording = false;
+
+      // Reset button appearance
+      const recordButton = this.chatWindow.querySelector(
+        ".ia-chat-record"
+      ) as HTMLButtonElement;
+      recordButton.classList.remove("recording");
+      recordButton.innerHTML = `
+        <svg viewBox="0 0 24 24" width="20" height="20">
+          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+          <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+        </svg>
+      `;
+    }
+  }
+
+  /**
+   * Processes the recorded audio and sends it
+   */
+  private async processRecordedAudio(): Promise<void> {
+    if (this.audioChunks.length === 0) return;
+
+    const audioBlob = new Blob(this.audioChunks, { type: "audio/webm" });
+
+    try {
+      // Convert WebM to WAV
+      const wavBlob = await this.convertToWav(audioBlob);
+
+      // Get text from textarea as well
+      const textarea = this.chatWindow.querySelector(
+        ".ia-chat-input"
+      ) as HTMLTextAreaElement;
+      const textMessage = textarea.value.trim();
+
+      // Send the audio message with WAV blob
+      this.sendAudioMessage(textMessage, wavBlob);
+
+      // Clear textarea
+      this.resetTextarea(textarea);
+    } catch (error) {
+      console.error("Error converting audio to WAV:", error);
+      this.addMessage("Error al procesar el audio", "error");
+    }
+  }
+
+  /**
+   * Converts audio blob to WAV format
+   */
+  private async convertToWav(audioBlob: Blob): Promise<Blob> {
+    const audioContext = new (window.AudioContext ||
+      (window as any).webkitAudioContext)();
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+    return this.audioBufferToWav(audioBuffer);
+  }
+
+  /**
+   * Converts AudioBuffer to WAV Blob
+   */
+  private audioBufferToWav(buffer: AudioBuffer): Blob {
+    const length = buffer.length;
+    const numberOfChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const bytesPerSample = 2; // 16-bit
+    const blockAlign = numberOfChannels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+    const dataSize = length * blockAlign;
+    const bufferSize = 44 + dataSize;
+
+    const arrayBuffer = new ArrayBuffer(bufferSize);
+    const view = new DataView(arrayBuffer);
+
+    // WAV header
+    const writeString = (offset: number, string: string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+
+    writeString(0, "RIFF");
+    view.setUint32(4, bufferSize - 8, true);
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
+    view.setUint32(16, 16, true); // PCM format
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, numberOfChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, 16, true); // 16-bit
+    writeString(36, "data");
+    view.setUint32(40, dataSize, true);
+
+    // Convert audio data
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+      for (let channel = 0; channel < numberOfChannels; channel++) {
+        const sample = Math.max(
+          -1,
+          Math.min(1, buffer.getChannelData(channel)[i])
+        );
+        const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+        view.setInt16(offset, intSample, true);
+        offset += 2;
+      }
+    }
+
+    return new Blob([arrayBuffer], { type: "audio/wav" });
+  }
+
+  /**
+   * Sends an audio message with optional text
+   */
+  private async sendAudioMessage(
+    textContent: string,
+    audioBlob: Blob
+  ): Promise<void> {
+    // Show user message (text if available, otherwise indicate audio message)
+    const displayMessage = textContent || "🎤 Mensaje de audio";
+    this.addMessage(displayMessage, "user");
+
+    // Show typing indicator
+    this.showTypingIndicator();
+
+    // Create FormData with audio and text
+    const formData = new FormData();
+    formData.append("content", textContent);
+    formData.append("voice_content", audioBlob, "audio.wav");
+    formData.append("context", ""); // You can implement context logic here if needed
+    formData.append("contextHash", "");
+
+    console.log("Sending FormData with audio:", {
+      content: textContent,
+      audioSize: audioBlob.size,
+      audioType: audioBlob.type,
+    });
+
+    try {
+      // Call the onSend function with FormData directly
+      const response = await this.options.onSend(formData);
+
+      // Remove indicator and show response
+      this.hideTypingIndicator();
+
+      // Handle different response types
+      if (typeof response === "string") {
+        this.addMessage(response, "assistant");
+      } else if (
+        response &&
+        typeof response === "object" &&
+        "content" in response
+      ) {
+        this.addMessage(
+          response.content,
+          "assistant",
+          response.isHtml || false
+        );
+      } else {
+        this.addMessage("Invalid response format", "error");
+      }
+    } catch (error) {
+      this.hideTypingIndicator();
+      console.error("Audio message error details:", {
+        error: error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        formDataEntries: Array.from(formData.entries()).map(([key, value]) => ({
+          key,
+          value:
+            value instanceof Blob
+              ? `Blob(${value.size} bytes, ${value.type})`
+              : value,
+        })),
+      });
+      this.addMessage(
+        `Error al procesar mensaje de audio: ${error instanceof Error ? error.message : String(error)}`,
+        "error"
+      );
+    }
+
+    // Scroll to the end
+    this.scrollToBottom();
+  }
+
+  /**
    * Automatically adjusts the height of the textarea according to its content
    */
   private autoResizeTextarea(textarea: HTMLTextAreaElement): void {
@@ -412,8 +715,14 @@ export class Chat {
       this.showTypingIndicator();
 
       try {
-        // Get response (can be a promise or a direct string)
-        const response = await this.options.onSend(message);
+        // Create FormData for text message
+        const formData = new FormData();
+        formData.append("content", message);
+        formData.append("context", ""); // You can implement context logic here if needed
+        // No voice_content for text-only messages
+
+        // Get response using FormData
+        const response = await this.options.onSend(formData);
 
         // Remove indicator and show response
         this.hideTypingIndicator();
@@ -462,6 +771,38 @@ export class Chat {
     const messageElement = document.createElement("div");
     messageElement.className = `ia-chat-message ${sender}`;
 
+    // Handle text content first
+    let displayText = text;
+
+    // If audioAnswers is enabled and this is an assistant message, check for JSON with audio_url
+    if (this.options.audioAnswers && sender === "assistant") {
+      try {
+        const jsonResponse = JSON.parse(text);
+        if (jsonResponse.content && jsonResponse.audio_url) {
+          displayText = jsonResponse.content;
+        }
+      } catch (e) {
+        // Not JSON, use text as is
+      }
+    }
+
+    if (isHtml && sender === "assistant") {
+      // If the message is HTML, sanitize it before inserting
+      messageElement.innerHTML = this.sanitizeHtml(displayText);
+    } else {
+      // Sanitize the text (prevent XSS)
+      const sanitizedText = this.sanitizeText(displayText);
+
+      // Format text (looking for URLs, etc.) - but skip link formatting if audioAnswers is enabled
+      const formattedText =
+        this.options.audioAnswers && sender === "assistant"
+          ? this.formatTextWithoutLinks(sanitizedText)
+          : this.formatText(sanitizedText);
+
+      messageElement.innerHTML = formattedText;
+    }
+
+    // Add audio player if audioAnswers is enabled and audio_url is present
     if (this.options.audioAnswers && sender === "assistant") {
       const audioUrlMatch = text.match(/"audio_url"\s*:\s*"([^"]+)"/s);
       if (audioUrlMatch) {
@@ -469,6 +810,7 @@ export class Chat {
 
         const audioContainer = document.createElement("div");
         audioContainer.className = "ia-audio-container";
+        audioContainer.style.marginTop = "8px";
 
         const playButton = document.createElement("button");
         playButton.className = "ia-audio-play-btn";
@@ -488,26 +830,7 @@ export class Chat {
         audioContainer.appendChild(playButton);
         audioContainer.appendChild(audioPlayer);
         messageElement.appendChild(audioContainer);
-
-        this.messageList.appendChild(messageElement);
-        this.scrollToBottom();
-        return;
       }
-
-      return;
-    }
-
-    if (isHtml && sender === "assistant") {
-      // If the message is HTML, sanitize it before inserting
-      messageElement.innerHTML = this.sanitizeHtml(text);
-    } else {
-      // Sanitize the text (prevent XSS)
-      const sanitizedText = this.sanitizeText(text);
-
-      // Format text (looking for URLs, etc.)
-      const formattedText = this.formatText(sanitizedText);
-
-      messageElement.innerHTML = formattedText;
     }
 
     this.messageList.appendChild(messageElement);
@@ -591,6 +914,34 @@ export class Chat {
       urlRegex,
       '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
     );
+
+    // Titles in **bold** => <span class="ia-title">...</span>
+    formatted = formatted.replace(
+      /\*\*(.*?)\*\*/g,
+      '<span class="ia-title">$1</span>'
+    );
+
+    // Lists with - at the beginning of the line
+    // First, convert lines starting with - to <li>
+    formatted = formatted.replace(
+      /(^|\n)-\s+(.*?)(?=\n|$)/g,
+      (match, p1, p2) => `${p1}<li>${p2}</li>`
+    );
+    // Then, wrap consecutive <li> elements in <ul>
+    formatted = formatted.replace(
+      /(<li>.*?<\/li>\s*)+/gs,
+      (match) => `<ul>${match.replace(/\s*$/, "")}</ul>`
+    );
+
+    return formatted;
+  }
+
+  /**
+   * Formats the text by detecting titles and lists, but skipping URL conversion to links
+   * Used when audioAnswers is enabled to avoid converting links to audio
+   */
+  private formatTextWithoutLinks(text: string): string {
+    let formatted = text;
 
     // Titles in **bold** => <span class="ia-title">...</span>
     formatted = formatted.replace(
@@ -967,6 +1318,80 @@ export class Chat {
       .ia-chat-send:focus {
         outline: none;
         box-shadow: none;
+      }
+      
+      /* Record button styles */
+      .ia-chat-record {
+        background-color: ${primaryColor};
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        margin-left: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        transition: all 0.2s;
+        outline: none;
+        user-select: none;
+      }
+      
+      .ia-chat-record:hover {
+        background-color: ${this.darkenColor(primaryColor || "#4a90e2", 10)};
+        transform: scale(1.05);
+      }
+      
+      .ia-chat-record.recording {
+        background-color: #ff4444;
+        animation: pulse 1s infinite;
+      }
+      
+      .ia-chat-record:focus {
+        outline: none;
+        box-shadow: none;
+      }
+      
+      @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+      }
+      
+      /* Audio container styles */
+      .ia-audio-container {
+        margin-top: 8px;
+      }
+      
+      .ia-audio-play-btn {
+        background-color: ${primaryColor};
+        color: white;
+        border: none;
+        border-radius: 20px;
+        padding: 8px 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        transition: background-color 0.2s;
+      }
+      
+      .ia-audio-play-btn:hover {
+        background-color: ${this.darkenColor(primaryColor || "#4a90e2", 10)};
+      }
+      
+      .ia-audio-icon {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
+      }
+      
+      .ia-audio-player {
+        margin-top: 8px;
+        width: 100%;
       }
       
       /* Typing indicator */
